@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Verstärker">
+<meta name="theme-color" content="#1f6f4a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Verstärkerboard</title>
+<style>
+  :root {
+    --bg: #f4f1e8;
+    --panel: #ffffff;
+    --ink: #22312a;
+    --muted: #6b7a72;
+    --line: #d9d3c3;
+    --cell: #fbf9f3;
+    --cell-alt: #f1ede1;
+    --accent: #1f6f4a;
+    --accent-ink: #ffffff;
+    --warn: #e08a1e;
+    --goal: #cfe8c4;
+    --goal-line: #7fb46b;
+    --back: #b54a3a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-user-select: none; user-select: none;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+
+  /* ---------- Kopfzeile ---------- */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 2px solid var(--line);
+  }
+  .timer {
+    display: flex; align-items: center; gap: 12px;
+    min-width: 0;
+  }
+  .clock {
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(28px, 4.5vw, 52px); font-weight: 700;
+    line-height: 1;
+    padding: 6px 14px; border-radius: 12px;
+    background: var(--cell-alt);
+  }
+  .clock.due { background: var(--warn); color: #fff; animation: pulse 1s infinite; }
+  .timer-info { font-size: 14px; color: var(--muted); line-height: 1.3; }
+  .timer-info b { color: var(--ink); }
+  .spacer { flex: 1; }
+  .btn {
+    border: 0; border-radius: 12px;
+    padding: 12px 18px; font-size: 18px; font-weight: 600;
+    background: var(--cell-alt);
+    min-height: 52px;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary.due { animation: pulse 1s infinite; background: var(--warn); }
+  .btn.icon { width: 52px; padding: 0; font-size: 24px; }
+  .btn:disabled { opacity: .4; }
+  @keyframes pulse { 50% { filter: brightness(1.18); transform: scale(1.04); } }
+
+  /* ---------- Board ---------- */
+  main { flex: 1; min-height: 0; padding: 10px 16px 14px; display: flex; flex-direction: column; }
+  .board {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(210px, 2.4fr) repeat(var(--cols), minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 4px;
+  }
+  .hcell {
+    text-align: center; font-weight: 700; font-size: 15px; color: var(--muted);
+    padding: 4px 0;
+  }
+  .hcell.goal { color: var(--accent); }
+  .name {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel); border-radius: 10px;
+    padding: 0 6px 0 12px;
+    font-size: clamp(16px, 2.2vh, 24px); font-weight: 700;
+    overflow: hidden; white-space: nowrap;
+  }
+  .name span { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .step {
+    border: 0; border-radius: 8px; background: var(--cell-alt);
+    width: 34px; height: 80%; max-height: 44px; font-size: 18px; padding: 0;
+    flex: none;
+  }
+  .step.back { color: var(--back); }
+  .cell {
+    position: relative;
+    background: var(--cell); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cell.start { background: var(--cell-alt); }
+  .cell.goal { background: var(--goal); box-shadow: inset 0 0 0 2px var(--goal-line); }
+  .cell.trail { background: #e3efe0; }
+  .token {
+    width: min(90%, 6.2vh); aspect-ratio: 1;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: clamp(14px, 2.6vh, 28px);
+    box-shadow: 0 3px 0 rgba(0,0,0,.18);
+  }
+  .token.moved { animation: pop .35s ease-out; }
+  @keyframes pop { 0% { transform: scale(.4); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+  .cell.goal .token::after { content: "⭐"; position: absolute; transform: translate(70%, -70%); font-size: .8em; }
+
+  .progress { margin-top: 8px; height: 10px; background: var(--cell-alt); border-radius: 6px; overflow: hidden; }
+  .progress div { height: 100%; background: var(--accent); transition: width .4s; }
+
+  /* ---------- Hinweis-Banner ---------- */
+  .toast {
+    position: fixed; left: 50%; top: 84px; transform: translateX(-50%);
+    background: var(--warn); color: #fff; font-size: 22px; font-weight: 700;
+    padding: 12px 22px; border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2);
+    display: none; z-index: 5;
+  }
+  .toast.show { display: block; animation: pop .35s; }
+
+  /* ---------- Ziel-Feier ---------- */
+  .celebrate {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(31,111,74,.94); color: #fff;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 18px; overflow: hidden;
+  }
+  .celebrate.show { display: flex; }
+  .celebrate h1 { font-size: clamp(40px, 8vw, 96px); margin: 0; }
+  .celebrate p { font-size: clamp(20px, 3vw, 32px); margin: 0; }
+  .confetti { position: absolute; top: -40px; font-size: 34px; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(115vh) rotate(540deg); } }
+
+  /* ---------- Einstellungen ---------- */
+  dialog {
+    border: 0; border-radius: 18px; padding: 0;
+    width: min(640px, 94vw); max-height: 92vh;
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    color: var(--ink); background: var(--panel);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg { padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; }
+  .dlg h2 { margin: 0; font-size: 24px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .row label { font-weight: 600; min-width: 170px; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button {
+    border: 2px solid var(--line); background: var(--panel); border-radius: 10px;
+    padding: 8px 14px; font-size: 17px; min-width: 56px;
+  }
+  .seg button.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+  textarea {
+    width: 100%; min-height: 200px; font: inherit; font-size: 17px;
+    border: 2px solid var(--line); border-radius: 10px; padding: 10px;
+    -webkit-user-select: text; user-select: text;
+  }
+  .hint { color: var(--muted); font-size: 14px; margin: -8px 0 0; }
+  .switch { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .switch input { width: 26px; height: 26px; accent-color: var(--accent); }
+  .dlg-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  .total { font-weight: 700; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="timer">
+    <div class="clock" id="clock">2:30</div>
+    <div class="timer-info" id="timerInfo"></div>
+  </div>
+  <button class="btn" id="btnStart">▶︎ Start</button>
+  <div class="spacer"></div>
+  <button class="btn icon" id="btnUndo" title="Rückgängig">↶</button>
+  <button class="btn" id="btnAllBack">◀ Alle</button>
+  <button class="btn primary" id="btnAllFwd">Alle ▶</button>
+  <button class="btn icon" id="btnSettings" title="Einstellungen">⚙︎</button>
+</header>
+
+<main>
+  <div class="board" id="board"></div>
+  <div class="progress"><div id="progress"></div></div>
+</main>
+
+<div class="toast" id="toast">Zeit für einen Schritt!</div>
+
+<div class="celebrate" id="celebrate">
+  <h1>🌳 Alle auf den Schulhof! 🌳</h1>
+  <p>Super gearbeitet, alle haben das Ziel erreicht.</p>
+  <button class="btn" id="btnCloseCelebrate" style="color:var(--ink);background:#fff">Schließen</button>
+</div>
+
+<dialog id="settings">
+  <form class="dlg" method="dialog" id="settingsForm">
+    <h2>Einstellungen</h2>
+
+    <div class="row">
+      <label>Anzahl Felder</label>
+      <div class="seg" id="segFields"></div>
+    </div>
+
+    <div class="row">
+      <label>Minuten pro Feld</label>
+      <div class="seg" id="segInterval"></div>
+    </div>
+    <p class="hint">Gesamtdauer: <span class="total" id="totalTime"></span></p>
+
+    <label class="switch"><input type="checkbox" id="optAuto"> Alle Kinder automatisch weiterschieben</label>
+    <label class="switch"><input type="checkbox" id="optSound"> Ton am Ende jedes Intervalls</label>
+
+    <div>
+      <label style="font-weight:600">Namen der Kinder (ein Name pro Zeile)</label>
+      <textarea id="names" spellcheck="false"></textarea>
+      <p class="hint">Die Namen bleiben nur auf diesem Gerät gespeichert.</p>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="btnTestSound">🔔 Ton testen</button>
+      <button class="btn" type="button" id="btnReset">Neue Stunde</button>
+      <button class="btn primary" type="button" id="btnSave">Übernehmen</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  "use strict";
+
+  const STORE_KEY = "verstaerkerboard.v1";
+  const COLORS = ["#e4572e","#2e86ab","#f2a541","#7b4fa3","#3a9d5d","#d1495b","#00798c","#8d6a3f","#c0398f","#4f6d7a","#e07a1f","#5b8c2a","#a23b72","#3d5a80","#b5651d"];
+
+  const defaults = {
+    fields: 8,
+    intervalSec: 150,
+    auto: false,
+    sound: true,
+    names: ["Kind 1","Kind 2","Kind 3","Kind 4","Kind 5","Kind 6","Kind 7","Kind 8","Kind 9","Kind 10"],
+    pos: [],
+    timer: { running: false, endAt: 0, remaining: 150, round: 0 },
+    celebrated: false
+  };
+
+  let state = load();
+  let undoStack = [];
+
+  // ---------- Speicher ----------
+  function load() {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+    s = Object.assign(structuredClone(defaults), s || {});
+    s.timer = Object.assign(structuredClone(defaults.timer), s.timer || {});
+    fixPositions(s);
+    return s;
+  }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function fixPositions(s) {
+    const p = [];
+    for (let i = 0; i < s.names.length; i++) {
+      p.push(Math.max(0, Math.min(s.fields, Number(s.pos[i]) || 0)));
+    }
+    s.pos = p;
+  }
+
+  // ---------- Ton ----------
+  let audioCtx = null;
+  function unlockAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }
+  function tone(freq, start, dur, vol = 0.35) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(vol, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(start); o.stop(start + dur + 0.05);
+  }
+  function chime() {
+    if (!state.sound || !audioCtx) return;
+    const t = audioCtx.currentTime + 0.02;
+    tone(784, t, 0.5); tone(1047, t + 0.18, 0.7);
+  }
+  function fanfare() {
+    if (!state.sound || !audioCtx) return;
+    const t = audioCtx.currentTime + 0.02;
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.16, 0.45));
+    tone(1047, t + 0.7, 1.0); tone(1319, t + 0.7, 1.0, 0.2);
+  }
+  document.addEventListener("pointerdown", unlockAudio, { passive: true });
+
+  // ---------- Board zeichnen ----------
+  const board = document.getElementById("board");
+  function initials(name) {
+    const parts = name.trim().split(/\s+/);
+    return (parts[0] || "?").slice(0, 2);
+  }
+  let lastPos = [];
+  function render() {
+    const n = state.fields;
+    board.style.setProperty("--cols", n + 1);
+    board.style.gridTemplateRows = `auto repeat(${state.names.length}, minmax(0, 1fr))`;
+    let html = `<div></div><div class="hcell">Start</div>`;
+    for (let c = 1; c <= n; c++) {
+      html += c === n ? `<div class="hcell goal">🌳 Ziel</div>` : `<div class="hcell">${c}</div>`;
+    }
+    state.names.forEach((name, i) => {
+      const p = state.pos[i];
+      const color = COLORS[i % COLORS.length];
+      html += `<div class="name">
+        <button class="step back" data-act="back" data-i="${i}" aria-label="${esc(name)} zurück">◀</button>
+        <span>${esc(name)}</span>
+        <button class="step" data-act="fwd" data-i="${i}" aria-label="${esc(name)} weiter">▶</button>
+      </div>`;
+      for (let c = 0; c <= n; c++) {
+        let cls = "cell";
+        if (c === 0) cls += " start";
+        else if (c === n) cls += " goal";
+        else if (c < p) cls += " trail";
+        const tok = c === p
+          ? `<div class="token${lastPos[i] !== p ? " moved" : ""}" style="background:${color}">${esc(initials(name))}</div>` : "";
+        html += `<div class="${cls}" data-act="cell" data-i="${i}" data-c="${c}">${tok}</div>`;
+      }
+    });
+    board.innerHTML = html;
+    lastPos = state.pos.slice();
+
+    const total = state.names.length * n;
+    const done = state.pos.reduce((a, b) => a + b, 0);
+    document.getElementById("progress").style.width = total ? (100 * done / total) + "%" : "0";
+    document.getElementById("btnUndo").disabled = undoStack.length === 0;
+    renderTimer();
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
+  }
+
+  // ---------- Bewegen ----------
+  function snapshot() {
+    undoStack.push(state.pos.slice());
+    if (undoStack.length > 50) undoStack.shift();
+  }
+  function move(indices, delta) {
+    snapshot();
+    indices.forEach(i => {
+      state.pos[i] = Math.max(0, Math.min(state.fields, state.pos[i] + delta));
+    });
+    afterMove();
+  }
+  function setPos(i, c) {
+    if (state.pos[i] === c) return;
+    snapshot();
+    state.pos[i] = c;
+    afterMove();
+  }
+  function afterMove() {
+    clearDue();
+    const all = state.pos.length > 0 && state.pos.every(p => p >= state.fields);
+    if (all && !state.celebrated) {
+      state.celebrated = true;
+      stopTimer();
+      celebrate();
+    } else if (!all) {
+      state.celebrated = false;
+    }
+    save(); render();
+  }
+  const allIdx = () => state.names.map((_, i) => i);
+
+  board.addEventListener("click", e => {
+    const t = e.target.closest("[data-act]");
+    if (!t) return;
+    const i = Number(t.dataset.i);
+    if (t.dataset.act === "fwd") move([i], +1);
+    else if (t.dataset.act === "back") move([i], -1);
+    else if (t.dataset.act === "cell") {
+      const c = Number(t.dataset.c), p = state.pos[i];
+      // Tipp rechts von der Figur = ein Feld weiter, links = ein Feld zurück
+      if (c > p) move([i], +1);
+      else if (c < p) move([i], -1);
+    }
+  });
+  document.getElementById("btnAllFwd").onclick = () => move(allIdx(), +1);
+  document.getElementById("btnAllBack").onclick = () => move(allIdx(), -1);
+  document.getElementById("btnUndo").onclick = () => {
+    if (!undoStack.length) return;
+    state.pos = undoStack.pop();
+    afterMove();
+  };
+
+  // ---------- Timer ----------
+  const clock = document.getElementById("clock");
+  const btnStart = document.getElementById("btnStart");
+  const toast = document.getElementById("toast");
+  let dueTimeout = null;
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+  }
+  function remainingNow() {
+    const t = state.timer;
+    return t.running ? (t.endAt - Date.now()) / 1000 : t.remaining;
+  }
+  function renderTimer() {
+    clock.textContent = fmt(remainingNow());
+    btnStart.textContent = state.timer.running ? "❚❚ Pause" : "▶︎ Start";
+    const maxRound = state.fields;
+    const info = document.getElementById("timerInfo");
+    info.innerHTML = `Intervall <b>${Math.min(state.timer.round + 1, maxRound)} / ${maxRound}</b><br>`
+      + `${fmt(state.intervalSec)} pro Feld · ${state.auto ? "automatisch" : "manuell"}`;
+  }
+  function startTimer() {
+    unlockAudio();
+    const t = state.timer;
+    if (t.remaining <= 0) t.remaining = state.intervalSec;
+    t.endAt = Date.now() + t.remaining * 1000;
+    t.running = true;
+    save(); renderTimer();
+  }
+  function stopTimer() {
+    const t = state.timer;
+    if (t.running) t.remaining = Math.max(0, (t.endAt - Date.now()) / 1000);
+    t.running = false;
+    save(); renderTimer();
+  }
+  function resetTimer() {
+    state.timer = { running: false, endAt: 0, remaining: state.intervalSec, round: 0 };
+    clearDue();
+  }
+  btnStart.onclick = () => state.timer.running ? stopTimer() : startTimer();
+
+  function intervalDone() {
+    const t = state.timer;
+    t.round++;
+    chime();
+    if (state.auto) {
+      move(allIdx(), +1);
+      showToast("Alle eine Stufe weiter! 🎉", 4000);
+    } else {
+      markDue();
+    }
+    const allDone = state.pos.every(p => p >= state.fields);
+    if (allDone || t.round >= state.fields) {
+      // Zeit ist abgelaufen, Timer stoppt
+      t.running = false; t.remaining = 0;
+    } else {
+      t.endAt += state.intervalSec * 1000;
+      if (t.endAt < Date.now()) t.endAt = Date.now() + state.intervalSec * 1000;
+    }
+    save(); render();
+  }
+  function markDue() {
+    clock.classList.add("due");
+    document.getElementById("btnAllFwd").classList.add("due");
+    showToast("Zeit für einen Schritt! Wer hat gut gearbeitet?", 0);
+    clearTimeout(dueTimeout);
+    dueTimeout = setTimeout(clearDue, 30000);
+  }
+  function clearDue() {
+    clock.classList.remove("due");
+    document.getElementById("btnAllFwd").classList.remove("due");
+    toast.classList.remove("show");
+    clearTimeout(dueTimeout);
+  }
+  function showToast(text, ms) {
+    toast.textContent = text;
+    toast.classList.add("show");
+    if (ms) setTimeout(() => toast.classList.remove("show"), ms);
+  }
+
+  setInterval(() => {
+    if (state.timer.running && Date.now() >= state.timer.endAt) intervalDone();
+    else renderTimer();
+  }, 250);
+
+  // ---------- Feier ----------
+  const cel = document.getElementById("celebrate");
+  function celebrate() {
+    fanfare();
+    cel.classList.add("show");
+    cel.querySelectorAll(".confetti").forEach(el => el.remove());
+    const items = ["🎉","⭐","🌳","⚽","🎈","☀️","🏃"];
+    for (let k = 0; k < 40; k++) {
+      const s = document.createElement("span");
+      s.className = "confetti";
+      s.textContent = items[k % items.length];
+      s.style.left = Math.random() * 100 + "vw";
+      s.style.animationDuration = 3 + Math.random() * 3 + "s";
+      s.style.animationDelay = Math.random() * 2 + "s";
+      cel.appendChild(s);
+    }
+  }
+  document.getElementById("btnCloseCelebrate").onclick = () => cel.classList.remove("show");
+
+  // ---------- Einstellungen ----------
+  const dlg = document.getElementById("settings");
+  let draft = null;
+  function seg(el, values, current, label, onPick) {
+    el.innerHTML = values.map(v =>
+      `<button type="button" data-v="${v}" class="${v === current ? "on" : ""}">${label(v)}</button>`).join("");
+    el.onclick = e => {
+      const b = e.target.closest("button"); if (!b) return;
+      onPick(Number(b.dataset.v));
+    };
+  }
+  function renderSettings() {
+    seg(document.getElementById("segFields"), [6, 7, 8, 9, 10], draft.fields, v => v,
+      v => { draft.fields = v; renderSettings(); });
+    seg(document.getElementById("segInterval"), [60, 120, 150, 180, 240, 300], draft.intervalSec, v => fmt(v),
+      v => { draft.intervalSec = v; renderSettings(); });
+    document.getElementById("totalTime").textContent =
+      fmt(draft.fields * draft.intervalSec).replace(/:00$/, "") + " Minuten";
+  }
+  document.getElementById("btnSettings").onclick = () => {
+    draft = { fields: state.fields, intervalSec: state.intervalSec };
+    document.getElementById("optAuto").checked = state.auto;
+    document.getElementById("optSound").checked = state.sound;
+    document.getElementById("names").value = state.names.join("\n");
+    renderSettings();
+    dlg.showModal();
+  };
+  function applySettings() {
+    const names = document.getElementById("names").value
+      .split("\n").map(s => s.trim()).filter(Boolean).slice(0, 30);
+    const timingChanged = draft.intervalSec !== state.intervalSec || draft.fields !== state.fields;
+    state.fields = draft.fields;
+    state.intervalSec = draft.intervalSec;
+    state.auto = document.getElementById("optAuto").checked;
+    state.sound = document.getElementById("optSound").checked;
+    if (names.length) state.names = names;
+    fixPositions(state);
+    if (timingChanged && !state.timer.running) state.timer.remaining = state.intervalSec;
+  }
+  document.getElementById("btnSave").onclick = () => {
+    applySettings(); undoStack = []; save(); render(); dlg.close();
+  };
+  document.getElementById("btnReset").onclick = () => {
+    if (!confirm("Neue Stunde starten? Alle Kinder gehen zurück auf Start.")) return;
+    applySettings();
+    state.pos = state.names.map(() => 0);
+    state.celebrated = false;
+    undoStack = [];
+    resetTimer();
+    save(); render(); dlg.close();
+  };
+  document.getElementById("btnTestSound").onclick = () => {
+    unlockAudio();
+    const prev = state.sound; state.sound = true; chime(); state.sound = prev;
+  };
+
+  // ---------- Start ----------
+  if (state.timer.running && Date.now() >= state.timer.endAt) {
+    // App war geschlossen: Timer anhalten statt verpasste Intervalle nachzuholen
+    state.timer.running = false; state.timer.remaining = 0;
+  }
+  render();
+
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

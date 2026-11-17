@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1f6f4a"/>
+  <g fill="#fbf9f3" opacity=".25">
+    <rect x="56" y="300" width="70" height="70" rx="14"/><rect x="140" y="300" width="70" height="70" rx="14"/>
+    <rect x="224" y="300" width="70" height="70" rx="14"/><rect x="308" y="300" width="70" height="70" rx="14"/>
+  </g>
+  <circle cx="259" cy="335" r="30" fill="#f2a541"/>
+  <text x="430" y="372" font-size="120" text-anchor="middle">🌳</text>
+  <text x="256" y="215" font-size="150" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="800">★</text>
+</svg>
